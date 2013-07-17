@@ -1,0 +1,19 @@
+Gem::Specification.new do |gem|
+  gem.name = "mysql2csv"
+  gem.version = "0.1"
+  gem.date = Date.today.to_s
+
+  gem.summary = "Runs a series of mySQL queries, dumping each to a CSV file"
+  gem.description = "Given a job lot of SQL queries to run, will run each of them in turn. The results from each will be output to a CSV file, and when they're all done, those CSV files will be zipped up."
+
+  gem.authors = ["Rob Miller"]
+  gem.email = "rob@bigfish.co.uk"
+  gem.homepage = "http://github.com/robmiller/mysql2csv"
+
+  gem.files = Dir["bin/*", "README*", "LICENSE*"]
+
+  gem.add_dependency("main")
+  gem.add_dependency("mysql2")
+  gem.add_dependency("escape")
+  gem.add_dependency("letters")
+end
