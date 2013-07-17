@@ -1,0 +1,202 @@
+#!/usr/bin/env ruby
+#
+# mysql2csv
+#
+# Runs a set of mySQL queries, and writes their output to CSV files.
+#
+# Author: Rob Miller <rob@bigfish.co.uk>
+
+require 'main'
+require 'net/ssh/gateway'
+require 'mysql2'
+require 'csv'
+require 'escape'
+require 'letters'
+
+Main {
+  option('hostname', 'H') {
+    default 'localhost'
+    argument_required
+    description "Hostname that mySQL is running on"
+  }
+
+  option('port', 'P') {
+    cast :int
+    default nil
+    argument_required
+    description "Port that mySQL runs on"
+  }
+
+  option('user', 'u') {
+    default 'root'
+    argument_required
+    description "mySQL username"
+  }
+
+  option('password', 'p') {
+    required
+    argument_required
+    description "mySQL password"
+  }
+
+  option('no-tunnel') {
+    cast :bool
+    default false
+    description "If true, will attempt to connect directly to mySQL rather than tunneling"
+  }
+
+  option('ssh-user') {
+    default `whoami`.strip
+    argument_required
+    description "Username to use when creating the SSH tunnel to the mySQL server"
+  }
+
+  option('ssh-port') {
+    default 22
+    cast :int
+    argument_required
+    description "Port to use when SSH tunneling"
+  }
+
+  option('ssh-key') {
+    argument_required
+    description "Path to an SSH keyfile to use when creating the SSH tunnel"
+  }
+
+  option('ssh-password') {
+    argument_required
+    description "Password to use when creating an SSH tunnel"
+  }
+
+  option('zip') {
+    cast :bool
+    default false
+    description "If given, the CSV files outputted will also be placed into a single zip."
+  }
+
+  option('password-zip') {
+    cast :bool
+    default false
+    description "If given, a password will be generated and applied to the zip file."
+  }
+
+  argument('database') {
+    argument_required
+    description "The name of the database on the live server"
+  }
+
+  def run
+    @database = params['database'].value
+    puts "Using database #{@database}.\n\n"
+
+    connect_to_db
+
+    make_output_dir
+
+    queries.each do |query|
+      puts "Doing query #{query['name']}..."
+
+      results = run_query(query['sql'])
+      write_to_csv(results, query['name'])
+
+      puts "Done.\n\n"
+    end
+
+    if params['zip'].given?
+      zip_files
+    end
+  end
+
+  def connect_to_db
+    if params['no-tunnel'].given?
+      host = params['host'].value
+      port = params['port'].value
+    else
+      puts "Tunneling to #{params['hostname'].value}..."
+
+      options = {}
+      if params['ssh-key'].given?
+        options[:keys] = [params['ssh-key'].value]
+      end
+      if params['ssh-key'].given?
+        options[:password] = params['ssh-password'].value
+      end
+
+      gateway = Net::SSH::Gateway.new(params['hostname'].value, params['ssh-user'].value, options)
+
+      host = '127.0.0.1'
+      port = gateway.open(host, params['port'].value)
+
+      puts "Done.\n\n"
+
+      at_exit { gateway.close(port) }
+    end
+
+    connection = {
+      :host => host,
+      :username => params['user'].value,
+      :password => params['password'].value,
+      :database => @database
+    }
+
+    # Only specify a port if we've been given one; not giving a port
+    # means connecting via a socket, which means that --no-tunnel with
+    # no other options will connect to localhost via a socket.
+    if !params['no-tunnel'].given? && params['port'].value
+      connection[:port] = port
+    end
+
+    $db = Mysql2::Client.new(connection)
+  end
+
+  def make_output_dir
+    @output_dir = "output/#{@database}"
+    unless File.exists? @output_dir
+      Dir.mkdir @output_dir
+    end
+  end
+
+  def run_query(sql)
+      $db.query(sql)
+  end
+
+  def write_to_csv(results, name)
+    CSV.open("#{@output_dir}/#{name}.csv", "w") do |csv|
+      results.each do |row|
+        csv << row.values
+      end
+    end
+  end
+
+  def zip_files
+    puts "Zipping files..."
+
+    cmd = ["zip", "-r"]
+
+    if params['password-zip'].given?
+      generated_password = ""
+      charset = "abcdefghijklmnopqrstuvwxyz1234567890"
+      10.times { generated_password += charset[rand(charset.length)] }
+
+      cmd += ["-P", generated_password]
+    end
+
+    cmd += ["output/#{@database}.zip", @output_dir]
+
+    system(Escape.shell_command(cmd))
+
+    if generated_password
+      puts "\nPassword for zip file: #{generated_password}\n\n"
+    end
+
+    puts "Done."
+  end
+
+  def queries
+    [
+      { "name" => "users", "sql" => "SELECT * FROM wp_users LIMIT 10" }
+    ]
+  end
+
+}
+
