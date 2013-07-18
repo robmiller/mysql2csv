@@ -29,6 +29,7 @@ GEM
     minitest (4.7.5)
     multi_json (1.7.7)
     mysql2 (0.3.11)
+    net-ssh (2.6.8)
     thread_safe (0.1.0)
       atomic
     tzinfo (0.3.37)
@@ -42,3 +43,4 @@ DEPENDENCIES
   letters
   main
   mysql2
+  net-ssh
