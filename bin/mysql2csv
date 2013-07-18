@@ -153,7 +153,13 @@ Main {
       connection[:port] = port
     end
 
-    $db = Mysql2::Client.new(connection)
+    begin
+      $db = Mysql2::Client.new(connection)
+    rescue Mysql2::Error => e
+      puts "Couldn't connect to mySQL server:"
+      puts e.message
+      exit
+    end
   end
 
   def make_output_dir
