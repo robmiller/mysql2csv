@@ -100,17 +100,30 @@ Main {
 
     make_output_dir
 
+    completed_queries = 0
+
     get_queries.each do |name, query|
       puts "Doing query #{name}..."
 
       results = run_query(query)
+
+      next unless results
+
       write_to_csv(results, name)
+
+      completed_queries += 1
 
       puts "Done.\n\n"
     end
 
-    if params['zip'].given?
-      zip_files
+    if completed_queries == 0
+      puts "Hmm, no queries seemed to complete successfully."
+    else
+      puts "#{completed_queries} quer#{completed_queries == 1 ? 'y' : 'ies'} completed successfully.\n\n"
+
+      if params['zip'].given?
+        zip_files
+      end
     end
   end
 
@@ -170,7 +183,12 @@ Main {
   end
 
   def run_query(sql)
+    begin
       $db.query(sql)
+    rescue Mysql2::Error => e
+      puts "The query didn't complete:"
+      puts "#{e.message}\n\n"
+    end
   end
 
   def write_to_csv(results, name)
